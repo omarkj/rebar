@@ -88,6 +88,13 @@
                                rebar_reltool,
                                rebar_upgrade
                               ]}
-                   ]}
+                   ]},
+         {recursive_cmds, [
+                           'get-deps',
+                           'check-deps',
+                           'delete-deps',
+                           'list-deps',
+                           'update-deps'
+                          ]}
         ]}
  ]}.
