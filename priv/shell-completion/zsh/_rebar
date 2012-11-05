@@ -17,6 +17,7 @@ _rebar_global_opts=(
   '(--config -C)'{--config,-C}'[Rebar config file to use]:files:_files'
   '(--profile -p)'{--profile,-p}'[Profile this run of rebar]'
   '(--keep-going -k)'{--keep-going,-k}'[Keep running after a command fails]'
+  '(--recursive -r)'{--recursive,-r}'[Apply commands to subdirs and dependencies]'
 )
 
 _rebar () {
