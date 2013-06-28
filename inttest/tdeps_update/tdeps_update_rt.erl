@@ -122,8 +122,7 @@ run(_Dir) ->
     ok = apply_cmds(GitCmds++ECmds, [{dir, "repo/e"}]),
     ok = apply_cmds(GitCmds++FCmds, [{dir, "repo/f"}]),
 
-    {ok, _} = retest_sh:run("./rebar -v get-deps", []),
-    {ok, _} = retest_sh:run("./rebar -v -r compile", []),
+    {ok, _} = retest_sh:run("./rebar -v get-deps compile", []),
     os:cmd("cp a2.rebar.config apps/a1/rebar.config"),
     {ok, _} = retest_sh:run("./rebar -v update-deps", []),
     {ok, _} = retest_sh:run("./rebar -v compile", []),
