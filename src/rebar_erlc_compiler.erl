@@ -36,7 +36,16 @@
 -include("rebar.hrl").
 -include_lib("stdlib/include/erl_compile.hrl").
 
--define(REBAR_BUILD_INFO, ".rebar.build.info").
+-define(BUILDINFO_VSN, 1).
+-define(BUILDINFO_FILE, ".rebar.build.info").
+-type erlc_info_v() :: {digraph:vertex(), digraph:label()} | 'false'.
+-type erlc_info_e() :: {digraph:vertex(), digraph:vertex()}.
+-type erlc_info() :: {list(erlc_info_v()), list(erlc_info_e())}.
+-record(buildinfo,
+        {
+          vsn = ?BUILDINFO_VSN :: pos_integer(),
+          erlc_info = {[], []} :: erlc_info()
+        }).
 
 %% ===================================================================
 %% Public API
@@ -106,7 +115,7 @@ clean(_Config, _AppFile) ->
         || F <- YrlFiles ]),
 
     %% Delete the build graph, if any
-    rebar_file_utils:rm_rf(filename:join("ebin", ?REBAR_BUILD_INFO)),
+    rebar_file_utils:rm_rf(buildinfo_file("ebin")),
 
     %% Erlang compilation is recursive, so it's possible that we have a nested
     %% directory structure in ebin with .beam files within. As such, we want
@@ -320,6 +329,18 @@ needs_compile(Source, Target, Hrls) ->
     lists:any(fun(I) -> TargetLastMod < filelib:last_modified(I) end,
               [Source] ++ Hrls).
 
+check_buildinfo(_OutDir, #buildinfo{vsn=?BUILDINFO_VSN}) ->
+    ok;
+check_buildinfo(OutDir, #buildinfo{vsn=Vsn}) ->
+    ?ABORT("~s file version is incompatible. expected: ~b got: ~b~n",
+           [buildinfo_file(OutDir), ?BUILDINFO_VSN, Vsn]);
+check_buildinfo(OutDir, _) ->
+    ?ABORT("~s file is invalid. Please delete before next run.~n",
+           [buildinfo_file(OutDir)]).
+
+buildinfo_file(OutDir) ->
+    filename:join(OutDir, ?BUILDINFO_FILE).
+
 init_graph(Config, Erls) ->
     KeepGraph = rebar_config:get_list(Config, keep_build_info, false),
     G = restore_graph("ebin", KeepGraph),
@@ -368,14 +389,17 @@ modify_graph(G, Source, IncludePath) ->
 restore_graph(_OutDir, _KeepGraph = false) ->
     digraph:new();
 restore_graph(OutDir, _KeepGraph = true) ->
-    File = filename:join(OutDir, ?REBAR_BUILD_INFO),
+    File = buildinfo_file(OutDir),
     G = digraph:new(),
     case file:read_file(File) of
         {ok, Data} ->
             case catch binary_to_term(Data) of
                 {'EXIT', _} ->
                     ok;
-                {Vs, Es} ->
+                BuildInfo ->
+                    ok = check_buildinfo(OutDir, BuildInfo),
+                    #buildinfo{erlc_info=ErlcInfo} = BuildInfo,
+                    {Vs, Es} = ErlcInfo,
                     lists:foreach(
                       fun({V, LastUpdated}) ->
                               digraph:add_vertex(G, V, LastUpdated)
@@ -405,8 +429,9 @@ store_graph(G, OutDir, _KeepGraph = true) ->
                              {V1, V2}
                      end, digraph:out_edges(G, V))
            end, Vs),
-    File = filename:join(OutDir, ?REBAR_BUILD_INFO),
-    file:write_file(File, term_to_binary({Vs, Es})).
+    File = buildinfo_file(OutDir),
+    Data = term_to_binary(#buildinfo{erlc_info={Vs, Es}}),
+    file:write_file(File, Data).
 
 -spec expand_file_names([file:filename()],
                         [file:filename()]) -> [file:filename()].
