@@ -342,7 +342,7 @@ buildinfo_file(OutDir) ->
     filename:join(OutDir, ?BUILDINFO_FILE).
 
 init_buildinfo(Config, Erls) ->
-    KeepBuildInfo = rebar_config:get_list(Config, keep_build_info, false),
+    KeepBuildInfo = rebar_config:get_list(Config, keep_build_info, true),
     G = restore_buildinfo("ebin", KeepBuildInfo),
     Updates = [update_buildinfo(G, Erl, include_path(Erl, Config))
                || Erl <- Erls],
