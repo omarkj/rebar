@@ -288,7 +288,7 @@ doterl_compile(Config, OutDir, MoreSources) ->
     CurrPath = code:get_path(),
     true = code:add_path(filename:absname("ebin")),
     OutDir1 = proplists:get_value(outdir, ErlOpts, OutDir),
-    G = init_graph(Config, RestErls),
+    G = init_buildinfo(Config, RestErls),
     %% Split RestErls so that parse_transforms and behaviours are instead added
     %% to erl_first_files, parse transforms first.
     {OtherFirstErls, OtherErls} =
@@ -341,17 +341,17 @@ check_buildinfo(OutDir, _) ->
 buildinfo_file(OutDir) ->
     filename:join(OutDir, ?BUILDINFO_FILE).
 
-init_graph(Config, Erls) ->
-    KeepGraph = rebar_config:get_list(Config, keep_build_info, false),
-    G = restore_graph("ebin", KeepGraph),
+init_buildinfo(Config, Erls) ->
+    KeepBuildInfo = rebar_config:get_list(Config, keep_build_info, false),
+    G = restore_buildinfo("ebin", KeepBuildInfo),
     lists:foreach(
       fun(Erl) ->
-              update_graph(G, Erl, include_path(Erl, Config))
+              update_buildinfo(G, Erl, include_path(Erl, Config))
       end, Erls),
-    ok = store_graph(G, "ebin", KeepGraph),
+    ok = store_buildinfo(G, "ebin", KeepBuildInfo),
     G.
 
-update_graph(G, Source, IncludePath) ->
+update_buildinfo(G, Source, IncludePath) ->
     case digraph:vertex(G, Source) of
         {_, LastUpdated} ->
             LastModified = filelib:last_modified(Source),
@@ -361,15 +361,15 @@ update_graph(G, Source, IncludePath) ->
                     %% All the edges will be erased automatically.
                     digraph:del_vertex(G, Source);
                LastUpdated < LastModified ->
-                    modify_graph(G, Source, IncludePath);
+                    modify_buildinfo(G, Source, IncludePath);
                true ->
                     ok
             end;
         false ->
-            modify_graph(G, Source, IncludePath)
+            modify_buildinfo(G, Source, IncludePath)
     end.
 
-modify_graph(G, Source, IncludePath) ->
+modify_buildinfo(G, Source, IncludePath) ->
     case file:open(Source, [read]) of
         {ok, Fd} ->
             Incls = parse_attrs(Fd, []),
@@ -379,16 +379,16 @@ modify_graph(G, Source, IncludePath) ->
             digraph:add_vertex(G, Source, LastUpdated),
             lists:foreach(
               fun(Incl) ->
-                      update_graph(G, Incl, IncludePath),
+                      update_buildinfo(G, Incl, IncludePath),
                       digraph:add_edge(G, Source, Incl)
               end, AbsIncls);
         _Err ->
             ok
     end.
 
-restore_graph(_OutDir, _KeepGraph = false) ->
+restore_buildinfo(_OutDir, _KeepBuildInfo = false) ->
     digraph:new();
-restore_graph(OutDir, _KeepGraph = true) ->
+restore_buildinfo(OutDir, _KeepBuildInfo = true) ->
     File = buildinfo_file(OutDir),
     G = digraph:new(),
     case file:read_file(File) of
@@ -414,9 +414,9 @@ restore_graph(OutDir, _KeepGraph = true) ->
     end,
     G.
 
-store_graph(_G, _OutDir, _KeepGraph = false) ->
+store_buildinfo(_G, _OutDir, _KeepBuildInfo = false) ->
     ok;
-store_graph(G, OutDir, _KeepGraph = true) ->
+store_buildinfo(G, OutDir, _KeepBuildInfo = true) ->
     Vs = lists:map(
            fun(V) ->
                    digraph:vertex(G, V)
