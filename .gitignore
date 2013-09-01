@@ -9,4 +9,4 @@ dialyzer_warnings
 rebar.cmd
 .eunit
 deps
-ebin/.rebar.build.info
+.rebarinfo

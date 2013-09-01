@@ -8,7 +8,7 @@ all:
 
 clean:
 	@rm -rf rebar ebin/*.beam inttest/rt.work rt.work .eunit
-	@rm -f ebin/.rebar.build.info
+	@rm -f .rebarinfo
 
 distclean: clean
 	@rm -f dialyzer_warnings
