@@ -430,7 +430,7 @@ store_buildinfo(G, OutDir, _KeepBuildInfo = true) ->
                      end, digraph:out_edges(G, V))
            end, Vs),
     File = buildinfo_file(OutDir),
-    Data = term_to_binary(#buildinfo{erlc_info={Vs, Es}}),
+    Data = term_to_binary(#buildinfo{erlc_info={Vs, Es}}, [{compressed, 9}]),
     file:write_file(File, Data).
 
 -spec expand_file_names([file:filename()],
