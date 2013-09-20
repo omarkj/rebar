@@ -393,9 +393,7 @@ restore_buildinfo(OutDir, _KeepBuildInfo = true) ->
     G = digraph:new(),
     case file:read_file(File) of
         {ok, Data} ->
-            case catch binary_to_term(Data) of
-                {'EXIT', _} ->
-                    ok;
+            try binary_to_term(Data) of
                 BuildInfo ->
                     ok = check_buildinfo(OutDir, BuildInfo),
                     #buildinfo{erlc_info=ErlcInfo} = BuildInfo,
@@ -408,6 +406,12 @@ restore_buildinfo(OutDir, _KeepBuildInfo = true) ->
                       fun({V1, V2}) ->
                               digraph:add_edge(G, V1, V2)
                       end, Es)
+            catch
+                error:badarg ->
+                    ?ERROR(
+                       "Failed (binary_to_term) to restore build info file."
+                       " Discard file.~n", []),
+                    ok
             end;
         _Err ->
             ok
