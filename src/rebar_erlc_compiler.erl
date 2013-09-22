@@ -344,11 +344,10 @@ buildinfo_file(OutDir) ->
 init_buildinfo(Config, Erls) ->
     KeepBuildInfo = rebar_config:get_list(Config, keep_build_info, false),
     G = restore_buildinfo("ebin", KeepBuildInfo),
-    lists:foreach(
-      fun(Erl) ->
-              update_buildinfo(G, Erl, include_path(Erl, Config))
-      end, Erls),
-    ok = store_buildinfo(G, "ebin", KeepBuildInfo),
+    Updates = [update_buildinfo(G, Erl, include_path(Erl, Config))
+               || Erl <- Erls],
+    Modified = lists:member(modified, Updates),
+    ok = store_buildinfo(G, "ebin", Modified, KeepBuildInfo),
     G.
 
 update_buildinfo(G, Source, IncludePath) ->
@@ -359,14 +358,17 @@ update_buildinfo(G, Source, IncludePath) ->
                     %% The file doesn't exist anymore,
                     %% erase it from the graph.
                     %% All the edges will be erased automatically.
-                    digraph:del_vertex(G, Source);
+                    digraph:del_vertex(G, Source),
+                    modified;
                LastUpdated < LastModified ->
-                    modify_buildinfo(G, Source, IncludePath);
+                    modify_buildinfo(G, Source, IncludePath),
+                    modified;
                true ->
-                    ok
+                    unmodified
             end;
         false ->
-            modify_buildinfo(G, Source, IncludePath)
+            modify_buildinfo(G, Source, IncludePath),
+            modified
     end.
 
 modify_buildinfo(G, Source, IncludePath) ->
@@ -418,9 +420,11 @@ restore_buildinfo(OutDir, _KeepBuildInfo = true) ->
     end,
     G.
 
-store_buildinfo(_G, _OutDir, _KeepBuildInfo = false) ->
+store_buildinfo(_G, _OutDir, _Modified, _KeepBuildInfo = false) ->
     ok;
-store_buildinfo(G, OutDir, _KeepBuildInfo = true) ->
+store_buildinfo(_G, _OutDir, _Modified = false, _KeepBuildInfo) ->
+    ok;
+store_buildinfo(G, OutDir, _Modified = true, _KeepBuildInfo = true) ->
     Vs = lists:map(
            fun(V) ->
                    digraph:vertex(G, V)
