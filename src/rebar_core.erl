@@ -154,9 +154,11 @@ should_cd_into_dir(Dir, Config, Command) ->
         rebar_config:is_recursive(Config) orelse
         is_recursive_command(Config, Command).
 
-is_recursive_command(_Config, Command) ->
-    {ok, RCmds} = application:get_env(rebar, recursive_cmds),
-    lists:member(Command, RCmds).
+is_recursive_command(Config, Command) ->
+    {ok, AppCmds} = application:get_env(rebar, recursive_cmds),
+    ConfCmds = rebar_config:get_local(Config, recursive_cmds, []),
+    RecursiveCmds = AppCmds ++ ConfCmds,
+    lists:member(Command, RecursiveCmds).
 
 skip_or_process_dir({[], undefined}=ModuleSet, Config, CurrentCodePath,
                     Dir, Command, DirSet) ->
