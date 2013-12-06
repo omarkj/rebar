@@ -375,6 +375,7 @@ modify_erlcinfo(G, Source, IncludePath) ->
         {ok, Fd} ->
             Incls = parse_attrs(Fd, []),
             AbsIncls = expand_file_names(Incls, IncludePath),
+            %% TODO: why do we suppress exceptions here?
             catch file:close(Fd),
             LastUpdated = {date(), time()},
             digraph:add_vertex(G, Source, LastUpdated),
