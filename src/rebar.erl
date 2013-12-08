@@ -362,6 +362,8 @@ list-templates                           List available templates
 
 doc                                      Generate Erlang program documentation
 
+prepare-deps                             Run 'rebar -r get-deps compile'
+
 check-deps                               Display to be fetched dependencies
 get-deps                                 Fetch dependencies
 update-deps                              Update fetched dependencies
@@ -474,6 +476,7 @@ command_names() ->
      "help",
      "list-deps",
      "list-templates",
+     "prepare-deps",
      "qc",
      "update-deps",
      "overlay",
