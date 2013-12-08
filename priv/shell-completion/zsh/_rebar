@@ -36,6 +36,7 @@ _rebar () {
         'list-template[List avaiavle templates]' \
         'doc[Generate Erlang program documentation]' \
         'check-deps[Display to be fetched dependencies]' \
+        'prepare-deps[Fetch and build dependencies]' \
         'get-deps[Fetch dependencies]' \
         'update-deps[Update fetched dependencies]' \
         'delete-deps[Delete fetched dependencies]' \

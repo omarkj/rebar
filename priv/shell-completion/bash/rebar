@@ -35,6 +35,7 @@ _rebar()
         help \
         list-deps \
         list-templates \
+        prepare-deps \
         qc \
         update-deps \
         version \
