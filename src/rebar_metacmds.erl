@@ -26,7 +26,8 @@
 %% -------------------------------------------------------------------
 -module(rebar_metacmds).
 
--export(['prepare-deps'/2]).
+-export(['prepare-deps'/2,
+         'refresh-deps'/2]).
 
 %% for internal use only
 -export([info/2]).
@@ -41,9 +42,16 @@
     Config1 = rebar_config:set_xconf(Config, recursive, true),
     rebar:run(Config1, ["get-deps", "compile"]).
 
+'refresh-deps'(Config, _AppFile) ->
+    %% Explicitly enable recursion for refresh-deps
+    Config1 = rebar_config:set_xconf(Config, recursive, true),
+    rebar:run(Config1, ["update-deps", "compile"]).
+
 %% ===================================================================
 %% Internal functions
 %% ===================================================================
 
 info(help, 'prepare-deps') ->
-    ?CONSOLE("Meta command to run 'rebar -r get-deps compile'.~n", []).
+    ?CONSOLE("Meta command to run 'rebar -r get-deps compile'.~n", []);
+info(help, 'refresh-deps') ->
+    ?CONSOLE("Meta command to run 'rebar -r update-deps compile'.~n", []).
