@@ -37,6 +37,7 @@ _rebar () {
         'doc[Generate Erlang program documentation]' \
         'check-deps[Display to be fetched dependencies]' \
         'prepare-deps[Fetch and build dependencies]' \
+        'refresh-deps[Update and build dependencies]' \
         'get-deps[Fetch dependencies]' \
         'update-deps[Update fetched dependencies]' \
         'delete-deps[Delete fetched dependencies]' \

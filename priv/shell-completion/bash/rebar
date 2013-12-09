@@ -37,6 +37,7 @@ _rebar()
         list-templates \
         prepare-deps \
         qc \
+        refresh-deps \
         update-deps \
         version \
         xref \
