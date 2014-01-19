@@ -274,7 +274,7 @@ doterl_compile(Config, OutDir) ->
     doterl_compile(Config, OutDir, []).
 
 doterl_compile(Config, OutDir, MoreSources) ->
-    FirstErls = rebar_config:get_list(Config, erl_first_files, []),
+    ErlFirstErls = rebar_config:get_list(Config, erl_first_files, []),
     ErlOpts = rebar_utils:erl_opts(Config),
     ?DEBUG("erl_opts ~p~n", [ErlOpts]),
     %% Support the src_dirs option allowing multiple directories to
@@ -282,7 +282,7 @@ doterl_compile(Config, OutDir, MoreSources) ->
     %% eunit tests be separated from the core application source.
     SrcDirs = rebar_utils:src_dirs(proplists:append_values(src_dirs, ErlOpts)),
     RestErls  = [Source || Source <- gather_src(SrcDirs, []) ++ MoreSources,
-                           not lists:member(Source, FirstErls)],
+                           not lists:member(Source, ErlFirstErls)],
     %% Make sure that ebin/ exists and is on the path
     ok = filelib:ensure_dir(filename:join("ebin", "dummy.beam")),
     CurrPath = code:get_path(),
@@ -314,15 +314,41 @@ doterl_compile(Config, OutDir, MoreSources) ->
     OtherFirstErlsDeps = lists:flatmap(
                            fun(Erl) -> erls(get_parents(G, Erl)) end,
                            OtherFirstErls),
-    NewFirstErls = FirstErls ++ OtherFirstErlsDeps ++ OtherFirstErls,
-    ?DEBUG("Files to compile first: ~p~n", [NewFirstErls]),
+    FirstErls = ErlFirstErls ++ uo_merge(OtherFirstErlsDeps, OtherFirstErls),
+    ?DEBUG("Files to compile first: ~p~n", [FirstErls]),
     rebar_base_compiler:run(
-      Config, NewFirstErls, OtherErls,
+      Config, FirstErls, OtherErls,
       fun(S, C) ->
               internal_erl_compile(C, S, OutDir1, ErlOpts, G)
       end),
     true = code:set_path(CurrPath),
     ok.
+
+%%
+%% Return a list without duplicates while preserving order
+%%
+ulist(L) ->
+    ulist(L, []).
+
+ulist([H|T], Acc) ->
+    case lists:member(H, T) of
+        true ->
+            ulist(T, Acc);
+        false ->
+            ulist(T, [H|Acc])
+    end;
+ulist([], Acc) ->
+    lists:reverse(Acc).
+
+%%
+%% Merge two lists without duplicates while preserving order
+%%
+uo_merge(L1, L2) ->
+    lists:foldl(fun(E, Acc) -> u_add_element(E, Acc) end, ulist(L1), L2).
+
+u_add_element(Elem, [Elem|_]=Set) -> Set;
+u_add_element(Elem, [E1|Set])     -> [E1|u_add_element(Elem, Set)];
+u_add_element(Elem, [])           -> [Elem].
 
 -spec include_path(file:filename(),
                    rebar_config:config()) -> [file:filename(), ...].
