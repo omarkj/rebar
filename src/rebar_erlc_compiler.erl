@@ -331,6 +331,12 @@ doterl_compile(Config, OutDir, MoreSources) ->
     ok.
 
 %%
+%% Return all .erl files from a list of files
+%%
+erls(Files) ->
+    [Erl || Erl <- Files, filename:extension(Erl) =:= ".erl"].
+
+%%
 %% Return a list without duplicates while preserving order
 %%
 ulist(L) ->
@@ -685,9 +691,3 @@ check_file(File) ->
         false -> ?ABORT("File ~p is missing, aborting\n", [File]);
         true -> File
     end.
-
-%%
-%% Return all .erl files from a list of files
-%%
-erls(Files) ->
-    [Erl || Erl <- Files, filename:extension(Erl) =:= ".erl"].
