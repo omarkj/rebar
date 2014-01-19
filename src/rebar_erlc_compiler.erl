@@ -309,11 +309,17 @@ doterl_compile(Config, OutDir, MoreSources) ->
                   end
           end, RestErls),
     %% Dependencies of OtherFirstErls that must be compiled first.
-    %% Alternatively we could get and compile the parents in
-    %% internal_erl_compile when compiling an individual file.
     OtherFirstErlsDeps = lists:flatmap(
                            fun(Erl) -> erls(get_parents(G, Erl)) end,
                            OtherFirstErls),
+    %% In case the way we retrieve OtherFirstErlsDeps or merge it with
+    %% OtherFirstErls does not result in the correct compile
+    %% priorities, or the method in use proves to be too slow for
+    %% certain projects, consider using a more elaborate method (maybe
+    %% digraph_utils) or alternatively getting and compiling the .erl
+    %% parents of an individual Source in internal_erl_compile. By not
+    %% handling this in internal_erl_compile, we also avoid extra
+    %% needs_compile/2 calls.
     FirstErls = ErlFirstErls ++ uo_merge(OtherFirstErlsDeps, OtherFirstErls),
     ?DEBUG("Files to compile first: ~p~n", [FirstErls]),
     rebar_base_compiler:run(
