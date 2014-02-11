@@ -52,73 +52,70 @@
 %% ===================================================================
 
 preprocess(Config, _) ->
-    %% Side effect to set deps_dir globally for all dependencies from
-    %% top level down. Means the root deps_dir is honoured or the default
-    %% used globally since it will be set on the first time through here
-    Config1 = set_shared_deps_dir(Config, get_shared_deps_dir(Config, [])),
+      case rebar_config:get_global(Config, skip_deps, false) of
+          "true" ->
+              {ok, Config, []};
+          _ ->
+              %% Side effect to set deps_dir globally for all dependencies from
+              %% top level down. Means the root deps_dir is honoured or the default
+              %% used globally since it will be set on the first time through here
+              Config1 = set_shared_deps_dir(Config, get_shared_deps_dir(Config, [])),
 
-    %% Get the list of deps for the current working directory and identify those
-    %% deps that are available/present.
-    Deps = rebar_config:get_local(Config1, deps, []),
-    {Config2, {AvailableDeps, MissingDeps}} = find_deps(Config1, find, Deps),
+              %% Get the list of deps for the current working directory and identify those
+              %% deps that are available/present.
+              Deps = rebar_config:get_local(Config1, deps, []),
+              {Config2, {AvailableDeps, MissingDeps}} = find_deps(Config1, find, Deps),
 
-    ?DEBUG("Available deps: ~p\n", [AvailableDeps]),
-    ?DEBUG("Missing deps  : ~p\n", [MissingDeps]),
+              ?DEBUG("Available deps: ~p\n", [AvailableDeps]),
+              ?DEBUG("Missing deps  : ~p\n", [MissingDeps]),
 
-    %% Add available deps to code path
-    Config3 = update_deps_code_path(Config2, AvailableDeps),
+              %% Add available deps to code path
+              Config3 = update_deps_code_path(Config2, AvailableDeps),
 
-    %% Filtering out 'raw' dependencies so that no commands other than
-    %% deps-related can be executed on their directories.
-    NonRawAvailableDeps = [D || D <- AvailableDeps, not D#dep.is_raw],
+              %% Filtering out 'raw' dependencies so that no commands other than
+              %% deps-related can be executed on their directories.
+              NonRawAvailableDeps = [D || D <- AvailableDeps, not D#dep.is_raw],
 
-    case rebar_config:get_xconf(Config, current_command, undefined) of
-        'update-deps' ->
-            %% Skip ALL of the dep folders, we do this because we don't want
-            %% any other calls to preprocess() for update-deps beyond the
-            %% toplevel directory. They aren't actually harmful, but they slow
-            %% things down unnecessarily.
-            NewConfig = lists:foldl(
-                          fun(D, Acc) ->
-                                  rebar_config:set_skip_dir(Acc, D#dep.dir)
-                          end,
-                          Config3,
-                          collect_deps(rebar_utils:get_cwd(), Config3)),
-            %% Return the empty list, as we don't want anything processed before
-            %% us.
-            {ok, NewConfig, []};
-        _ ->
-            %% If skip_deps=true, mark each dep dir as a skip_dir w/ the core
-            %% so that the current command doesn't run on the dep dir.
-            %% However, pre/postprocess WILL run (and we want it to) for
-            %% transitivity purposes.
-            %%
-            %% Also, if skip_deps=comma,separated,app,list, then only the given
-            %% dependencies are skipped.
-            NewConfig =
-                case rebar_config:get_global(Config3, skip_deps, false) of
-                    "true" ->
-                        lists:foldl(
-                          fun(#dep{dir = Dir}, C) ->
-                                  rebar_config:set_skip_dir(C, Dir)
-                          end, Config3, AvailableDeps);
-                    Apps when is_list(Apps) ->
-                        SkipApps = [list_to_atom(App) ||
-                                       App <- string:tokens(Apps, ",")],
-                        lists:foldl(
-                          fun(#dep{dir = Dir, app = App}, C) ->
-                                  case lists:member(App, SkipApps) of
-                                      true -> rebar_config:set_skip_dir(C, Dir);
-                                      false -> C
-                                  end
-                          end, Config3, AvailableDeps);
-                    _ ->
-                        Config3
-                end,
-
-            %% Return all the available dep directories for process
-            {ok, NewConfig, dep_dirs(NonRawAvailableDeps)}
-    end.
+              case rebar_config:get_xconf(Config, current_command, undefined) of
+                  'update-deps' ->
+                      %% Skip ALL of the dep folders, we do this because we don't want
+                      %% any other calls to preprocess() for update-deps beyond the
+                      %% toplevel directory. They aren't actually harmful, but they slow
+                      %% things down unnecessarily.
+                      NewConfig = lists:foldl(
+                                    fun(D, Acc) ->
+                                            rebar_config:set_skip_dir(Acc, D#dep.dir)
+                                    end,
+                                    Config3,
+                                    collect_deps(rebar_utils:get_cwd(), Config3)),
+                      %% Return the empty list, as we don't want anything processed before
+                      %% us.
+                      {ok, NewConfig, []};
+                  _ ->
+                      %% If skip_deps=true, mark each dep dir as a skip_dir.
+                      %%
+                      %% Also, if skip_deps=comma,separated,app,list, then only the given
+                      %% dependencies are skipped.
+                      case rebar_config:get_global(Config3, skip_deps, false) of
+                          Apps when is_list(Apps) ->
+                              SkipApps = [list_to_atom(App) ||
+                                             App <- string:tokens(Apps, ",")],
+                              Config4 = lists:foldl(
+                                          fun(#dep{dir = Dir, app = App}, C) ->
+                                                  case lists:member(App, SkipApps) of
+                                                      true -> rebar_config:set_skip_dir(C, Dir);
+                                                      false -> C
+                                                  end
+                                          end, Config3, AvailableDeps),
+                              %% Return all the available dep directories for process
+                              {ok, Config4, dep_dirs(NonRawAvailableDeps)};
+                          _ ->
+                              Config3,
+                              %% Return all the available dep directories for process
+                              {ok, Config3, dep_dirs(NonRawAvailableDeps)}
+                      end
+              end
+      end.
 
 postprocess(Config, _) ->
     case rebar_config:get_xconf(Config, ?MODULE, undefined) of
@@ -130,8 +127,13 @@ postprocess(Config, _) ->
     end.
 
 compile(Config, _) ->
-    {Config1, _AvailDeps} = do_check_deps(Config),
-    {ok, Config1}.
+    case rebar_config:get_global(Config, skip_deps, false) of
+        "true" ->
+            {ok, Config};
+        _ ->
+            {Config1, _AvailDeps} = do_check_deps(Config),
+            {ok, Config1}
+    end.
 
 %% set REBAR_DEPS_DIR and ERL_LIBS environment variables
 setup_env(Config) ->
