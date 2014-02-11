@@ -432,6 +432,9 @@ modify_erlcinfo(G, Source, IncludePath) ->
                       digraph:add_edge(G, Source, Incl)
               end, AbsIncls);
         _Err ->
+            %% TODO: Is there a reasonable way for us to handle
+            %%       handle the error here? Otherwise, let it fail.
+            %%       Suppressing the error doesn't seem right.
             ok
     end.
 
