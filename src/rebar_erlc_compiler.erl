@@ -426,25 +426,17 @@ update_erlcinfo(G, Source, Dirs) ->
     end.
 
 modify_erlcinfo(G, Source, Dirs) ->
-    case file:open(Source, [read]) of
-        {ok, Fd} ->
-            Incls = parse_attrs(Fd, []),
-            AbsIncls = expand_file_names(Incls, Dirs),
-            %% TODO: why do we suppress exceptions here?
-            catch file:close(Fd),
-            LastUpdated = {date(), time()},
-            digraph:add_vertex(G, Source, LastUpdated),
-            lists:foreach(
-              fun(Incl) ->
-                      update_erlcinfo(G, Incl, Dirs),
-                      digraph:add_edge(G, Source, Incl)
-              end, AbsIncls);
-        _Err ->
-            %% TODO: Is there a reasonable way for us to handle
-            %%       handle the error here? Otherwise, let it fail.
-            %%       Suppressing the error doesn't seem right.
-            ok
-    end.
+    {ok, Fd} = file:open(Source, [read]),
+    Incls = parse_attrs(Fd, []),
+    AbsIncls = expand_file_names(Incls, Dirs),
+    ok = file:close(Fd),
+    LastUpdated = {date(), time()},
+    digraph:add_vertex(G, Source, LastUpdated),
+    lists:foreach(
+      fun(Incl) ->
+              update_erlcinfo(G, Incl, Dirs),
+              digraph:add_edge(G, Source, Incl)
+      end, AbsIncls).
 
 restore_erlcinfo(Config) ->
     File = erlcinfo_file(Config),
