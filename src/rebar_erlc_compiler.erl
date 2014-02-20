@@ -289,13 +289,13 @@ doterl_compile(Config, OutDir, MoreSources) ->
     true = code:add_path(filename:absname("ebin")),
     OutDir1 = proplists:get_value(outdir, ErlOpts, OutDir),
     G = init_erlcinfo(Config, RestErls),
-    %% Split RestErls so that parse_transforms and behaviours are instead added
-    %% to erl_first_files, parse transforms first.
+    %% Split RestErls so that files which are depended on are treated
+    %% like erl_first_files.
     {OtherFirstErls, OtherErls} =
         lists:partition(
           fun(F) ->
                   Children = get_children(G, F),
-                  ?DEBUG("Files dependent on ~s: ~p~n", [F, Children]),
+                  log_files(?FMT("Files dependent on ~s", [F]), Children),
 
                   case erls(Children) of
                       [] ->
@@ -312,8 +312,8 @@ doterl_compile(Config, OutDir, MoreSources) ->
     OtherFirstErlsDeps = lists:flatmap(
                            fun(Erl) -> erls(get_parents(G, Erl)) end,
                            OtherFirstErls),
-    %% In case the way we retrieve OtherFirstErlsDeps or merge it with
-    %% OtherFirstErls does not result in the correct compile
+    %% NOTE: In case the way we retrieve OtherFirstErlsDeps or merge
+    %% it with OtherFirstErls does not result in the correct compile
     %% priorities, or the method in use proves to be too slow for
     %% certain projects, consider using a more elaborate method (maybe
     %% digraph_utils) or alternatively getting and compiling the .erl
@@ -390,13 +390,21 @@ erlcinfo_file(Config) ->
 
 init_erlcinfo(Config, Erls) ->
     G = restore_erlcinfo(Config),
-    Updates = [update_erlcinfo(G, Erl, include_path(Erl, Config))
+    %% Get a unique list of dirs based on the source files' locations.
+    %% This is used for finding files in sub dirs of the configured
+    %% src_dirs. For example, src/sub_dir/foo.erl.
+    Dirs = sets:to_list(lists:foldl(
+                          fun(Erl, Acc) ->
+                                  Dir = filename:dirname(Erl),
+                                  sets:add_element(Dir, Acc)
+                          end, sets:new(), Erls)),
+    Updates = [update_erlcinfo(G, Erl, include_path(Erl, Config) ++ Dirs)
                || Erl <- Erls],
     Modified = lists:member(modified, Updates),
     ok = store_erlcinfo(G, Config, Modified),
     G.
 
-update_erlcinfo(G, Source, IncludePath) ->
+update_erlcinfo(G, Source, Dirs) ->
     case digraph:vertex(G, Source) of
         {_, LastUpdated} ->
             LastModified = filelib:last_modified(Source),
@@ -407,28 +415,28 @@ update_erlcinfo(G, Source, IncludePath) ->
                     digraph:del_vertex(G, Source),
                     modified;
                LastUpdated < LastModified ->
-                    modify_erlcinfo(G, Source, IncludePath);
+                    modify_erlcinfo(G, Source, Dirs);
                     modified;
                true ->
                     unmodified
             end;
         false ->
-            modify_erlcinfo(G, Source, IncludePath),
+            modify_erlcinfo(G, Source, Dirs),
             modified
     end.
 
-modify_erlcinfo(G, Source, IncludePath) ->
+modify_erlcinfo(G, Source, Dirs) ->
     case file:open(Source, [read]) of
         {ok, Fd} ->
             Incls = parse_attrs(Fd, []),
-            AbsIncls = expand_file_names(Incls, IncludePath),
+            AbsIncls = expand_file_names(Incls, Dirs),
             %% TODO: why do we suppress exceptions here?
             catch file:close(Fd),
             LastUpdated = {date(), time()},
             digraph:add_vertex(G, Source, LastUpdated),
             lists:foreach(
               fun(Incl) ->
-                      update_erlcinfo(G, Incl, IncludePath),
+                      update_erlcinfo(G, Incl, Dirs),
                       digraph:add_edge(G, Source, Incl)
               end, AbsIncls);
         _Err ->
@@ -488,11 +496,18 @@ store_erlcinfo(G, Config, _Modified) ->
     Data = term_to_binary(#erlcinfo{info={Vs, Es}}, [{compressed, 9}]),
     file:write_file(File, Data).
 
+%% NOTE: If one of the entries in Files, for example, refers to
+%% gen_server.erl, that entry will be dropped. It is dropped because
+%% such an entry usually refers to the beam file, and we don't pass a
+%% list of OTP src dirs for finding gen_server.erl's full path. Also,
+%% if gen_server.erl was modified, it's not rebar's task to compile a
+%% new version of the beam file. Therefore, it's reasonable to drop
+%% such entries. Also see process_attr(behaviour, Form, Includes).
 -spec expand_file_names([file:filename()],
                         [file:filename()]) -> [file:filename()].
-expand_file_names(Files, IncludePath) ->
-    %% We check if Files exist by itself or
-    %% within the directories listed in IncludePath.
+expand_file_names(Files, Dirs) ->
+    %% We check if Files exist by itself or within the directories
+    %% listed in Dirs.
     %% Return the list of files matched.
     lists:flatmap(
       fun(Incl) ->
@@ -501,15 +516,15 @@ expand_file_names(Files, IncludePath) ->
                       [Incl];
                   false ->
                       lists:flatmap(
-                        fun(Path) ->
-                                FullPath = filename:join(Path, Incl),
+                        fun(Dir) ->
+                                FullPath = filename:join(Dir, Incl),
                                 case filelib:is_regular(FullPath) of
                                     true ->
                                         [FullPath];
                                     false ->
                                         []
                                 end
-                        end, IncludePath)
+                        end, Dirs)
               end
       end, Files).
 
@@ -530,7 +545,7 @@ internal_erl_compile(Config, Source, OutDir, ErlOpts, G) ->
     %% Determine the target name and includes list by inspecting the source file
     Module = filename:basename(Source, ".erl"),
     Parents = get_parents(G, Source),
-    ?DEBUG("~s depends on: ~p~n", [Source, Parents]),
+    log_files(?FMT("~s depends on", [Source]), Parents),
 
     %% Construct the target filename
     Target = filename:join([OutDir | string:tokens(Module, ".")]) ++ ".beam",
@@ -647,6 +662,8 @@ process_attr(Form, Includes) ->
         AttrName = erl_syntax:atom_value(erl_syntax:attribute_name(Form)),
         process_attr(AttrName, Form, Includes)
     catch _:_ ->
+            %% TODO: We should probably try to be more specific here
+            %% and not suppress all errors.
             Includes
     end.
 
@@ -666,7 +683,8 @@ process_attr(include, Form, Includes) ->
     [File|Includes];
 process_attr(include_lib, Form, Includes) ->
     [FileNode] = erl_syntax:attribute_arguments(Form),
-    File = erl_syntax:string_value(FileNode),
+    RawFile = erl_syntax:string_value(FileNode),
+    File = maybe_expand_include_lib_path(RawFile),
     [File|Includes];
 process_attr(behaviour, Form, Includes) ->
     [FileNode] = erl_syntax:attribute_arguments(Form),
@@ -682,6 +700,30 @@ process_attr(compile, Form, Includes) ->
             [atom_to_list(Mod) ++ ".erl"|Includes]
     end.
 
+%% Given the filename from an include_lib attribute, if the path
+%% exists, return unmodified, or else get the absolute ERL_LIBS
+%% path.
+maybe_expand_include_lib_path(File) ->
+    case filelib:is_regular(File) of
+        true ->
+            File;
+        false ->
+            expand_include_lib_path(File)
+    end.
+
+%% Given a path like "stdlib/include/erl_compile.hrl", return
+%% "OTP_INSTALL_DIR/lib/erlang/lib/stdlib-x.y.z/include/erl_compile.hrl".
+%% Usually a simple [Lib, SubDir, File1] = filename:split(File) should
+%% work, but to not crash when an unusual include_lib path is used,
+%% utilize more elaborate logic.
+expand_include_lib_path(File) ->
+    File1 = filename:basename(File),
+    Split = filename:split(filename:dirname(File)),
+    Lib = hd(Split),
+    SubDir = filename:join(tl(Split)),
+    Dir = code:lib_dir(list_to_atom(Lib), list_to_atom(SubDir)),
+    filename:join(Dir, File1).
+
 %%
 %% Ensure all files in a list are present and abort if one is missing
 %%
@@ -693,4 +735,14 @@ check_file(File) ->
     case filelib:is_regular(File) of
         false -> ?ABORT("File ~p is missing, aborting\n", [File]);
         true -> File
+    end.
+
+%% Print prefix followed by list of files. If the list is empty, print
+%% on the same line, otherwise use a separate line.
+log_files(Prefix, Files) ->
+    case Files of
+        [] ->
+            ?DEBUG("~s: ~p~n", [Prefix, Files]);
+        _ ->
+            ?DEBUG("~s:~n~p~n", [Prefix, Files])
     end.
