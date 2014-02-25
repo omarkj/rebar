@@ -38,7 +38,7 @@
 
 -define(ERLCINFO_VSN, 1).
 -define(ERLCINFO_FILE, "erlcinfo").
--type erlc_info_v() :: {digraph:vertex(), digraph:label()} | 'false'.
+-type erlc_info_v() :: {digraph:vertex(), term()} | 'false'.
 -type erlc_info_e() :: {digraph:vertex(), digraph:vertex()}.
 -type erlc_info() :: {list(erlc_info_v()), list(erlc_info_e())}.
 -record(erlcinfo,
