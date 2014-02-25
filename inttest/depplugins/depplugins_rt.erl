@@ -33,7 +33,7 @@ files() ->
     ].
 
 run(_Dir) ->
-    ?assertMatch({ok, _}, retest_sh:run("./rebar compile", [])),
+    ?assertMatch({ok, _}, retest_sh:run("./rebar -r compile", [])),
     ?assertEqual(true, filelib:is_regular("deps/dependsonplugin/pre.compile")),
     ok.
 
