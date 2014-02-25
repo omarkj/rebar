@@ -690,8 +690,14 @@ process_attr(compile, Form, Includes) ->
         {core_transform, Mod} ->
             [atom_to_list(Mod) ++ ".erl"|Includes];
         L when is_list(L) ->
-            {_, Mod} = lists:keyfind(parse_transform, 1, L),
-            [atom_to_list(Mod) ++ ".erl"|Includes]
+            lists:foldl(
+              fun({parse_transform, M}, Acc) ->
+                      [atom_to_list(M) ++ ".erl"|Acc];
+                 ({core_transform, M}, Acc) ->
+                      [atom_to_list(M) ++ ".erl"|Acc];
+                 (_, Acc) ->
+                      Acc
+              end, Includes, L)
     end.
 
 %% Given the filename from an include_lib attribute, if the path
