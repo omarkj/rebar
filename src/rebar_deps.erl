@@ -66,7 +66,7 @@ preprocess(Config, _) ->
     ?DEBUG("Missing deps  : ~p\n", [MissingDeps]),
 
     %% Add available deps to code path
-    Config3 = update_deps_code_path(Config2, AvailableDeps),
+    Config3 = update_deps_code_path(Config2, collect_deps(rebar_utils:get_cwd(), Config2)),
 
     %% Filtering out 'raw' dependencies so that no commands other than
     %% deps-related can be executed on their directories.
